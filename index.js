@@ -15,28 +15,12 @@ exports.handler = async (event, context) => {
   const sanitizedKey = key.replace(/\+/g, " ");
   const keyWithoutExtension = sanitizedKey.replace(/.[^.]+$/, "");
   const extension = sanitizedKey.substring(keyWithoutExtension.length+1);
-  const parts = key.split("/");
-  const folder = parts[0];
-  const file = parts[1];
 
   if (key.match("-size-")) {
     return context.succeed();
   }
 
   try {
-    const data = await s3
-      .listObjects({ Bucket, Prefix: `${folder}/` })
-      .promise();
-    const files = data.Contents;
-    const Objects = files.reduce((acc, f) => {
-      if (!f.Key.match(file)) acc.push({ Key: f.Key });
-      return acc;
-    }, []);
-
-    if (Objects.length) {
-      await s3.deleteObjects({ Bucket, Delete: { Objects } }).promise();
-    }
-
     const image = await s3.getObject({ Bucket, Key: sanitizedKey }).promise();
 
     for (const t of transforms) {
