@@ -2,7 +2,6 @@ const sharp = require("sharp");
 const aws = require("aws-sdk");
 const s3 = new aws.S3();
 
-const Bucket = "eedo-front";
 const transforms = [
   { name: "thumbnail", size: 100 },
   { name: "small", size: 300 },
@@ -11,17 +10,24 @@ const transforms = [
 ];
 
 exports.handler = async (event, context) => {
+  const bucket = event.Records[0].s3.bucket.name;
   const key = event.Records[0].s3.object.key;
   const sanitizedKey = key.replace(/\+/g, " ");
   const keyWithoutExtension = sanitizedKey.replace(/.[^.]+$/, "");
-  const extension = sanitizedKey.substring(keyWithoutExtension.length+1);
+  const extension = sanitizedKey.substring(keyWithoutExtension.length + 1);
+
+  if (!key.match("/images/")) {
+    return context.succeed();
+  }
 
   if (key.match("-size-")) {
     return context.succeed();
   }
 
   try {
-    const image = await s3.getObject({ Bucket, Key: sanitizedKey }).promise();
+    const image = await s3
+      .getObject({ Bucket: bucket, Key: sanitizedKey })
+      .promise();
 
     for (const t of transforms) {
       const resizedImg = await sharp(image.Body)
@@ -30,10 +36,14 @@ exports.handler = async (event, context) => {
         .toBuffer();
       const updated = await s3
         .putObject({
-          Bucket,
-          ACL:'public-read',
+          Bucket: bucket,
+          ACL: "public-read",
           Body: resizedImg,
-          Key: `${keyWithoutExtension}-size-${t.name}.${extension}`,
+          Key: `${
+            keyWithoutExtension.endsWith("-original")
+              ? keyWithoutExtension.slice(0, -9)
+              : keyWithoutExtension
+          }-size-${t.name}.${extension}`,
         })
         .promise();
     }
